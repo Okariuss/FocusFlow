@@ -33,6 +33,28 @@ final class TimerViewModel {
         isSessionActive ? "Focusing..." : "Ready to focus"
     }
     
+    var todaysTotalMinutes: Int {
+        calculateTodaysTotal()
+    }
+    
+    var todaysTotalFormatted: String {
+        let minutes = todaysTotalMinutes
+        
+        if minutes == 0 {
+            return "0m"
+        } else if minutes < 60 {
+            return "\(minutes)m"
+        } else {
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            if remainingMinutes == 0 {
+                return "\(hours)h"
+            } else {
+                return "\(hours)h \(remainingMinutes)m"
+            }
+        }
+    }
+    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
@@ -68,8 +90,12 @@ final class TimerViewModel {
         elapsedTime = 0
     }
     
+    func refreshTodaysTotal() {
+        _ = todaysTotalMinutes
+    }
+    
     private func startTimer() {
-        stopTimer()
+//        stopTimer()
         
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateElapsedTime()
@@ -87,6 +113,38 @@ final class TimerViewModel {
     
     private func updateElapsedTime() {
         guard let session = currentSession else { return }
-        elapsedTime = Date().timeIntervalSince(session.startTime)
+        elapsedTime = Date().timeIntervalSince(session.startTime)        
+    }
+    
+    private func calculateTodaysTotal() -> Int {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        
+        var descriptor = FetchDescriptor<FocusSession>(
+            predicate: #Predicate { session in
+                session.startTime >= today && session.startTime < tomorrow
+            }
+        )
+        
+        descriptor.sortBy = [SortDescriptor(\.startTime)]
+        
+        guard let sessions = try? modelContext.fetch(descriptor) else {
+            return 0
+        }
+        
+        var totalSeconds: TimeInterval = 0
+        
+        for session in sessions {
+            if session.endTime != nil {
+                totalSeconds += session.duration
+            }
+        }
+        
+        if let currentSession {
+            totalSeconds += elapsedTime
+        }
+        
+        return Int(totalSeconds / 60)
     }
 }
