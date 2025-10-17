@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct HomeView: View {
     
-    @State private var isSessionActive = false
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel: TimerViewModel?
     
     var body: some View {
         NavigationStack {
@@ -31,6 +33,11 @@ struct HomeView: View {
             .navigationTitle("FocusFlow")
             .toolbar {
                 bottomToolbar
+            }
+            .onAppear {
+                if viewModel == nil {
+                    viewModel = TimerViewModel(modelContext: modelContext)
+                }
             }
         }
     }
@@ -55,12 +62,13 @@ private extension HomeView {
     
     var timerDisplay: some View {
         VStack(spacing: 16) {
-            Text("00:00:00")
+            Text(viewModel?.formattedTime ?? "00:00:00")
                 .font(.system(size: 72, weight: .thin, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.primary)
+                .contentTransition(.numericText())
             
-            Text("Ready to focus")
+            Text(viewModel?.statusText ?? "Ready to focus")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -71,11 +79,13 @@ private extension HomeView {
             startStopButton
                 .padding(.horizontal, 32)
             
-            if isSessionActive {
+            if viewModel?.isSessionActive == true {
                 pauseButton
                     .padding(.horizontal, 32)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.easeInOut, value: viewModel?.isSessionActive)
     }
 }
 
@@ -83,21 +93,22 @@ private extension HomeView {
 private extension HomeView {
     var startStopButton: some View {
         Button {
-            isSessionActive.toggle()
+            handleMainButtonTap()
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: isSessionActive ? "stop.fill" : "play.fill")
+                Image(systemName: viewModel?.isSessionActive == true ? "stop.fill" : "play.fill")
                     .font(.title2)
                 
-                Text(isSessionActive ? "Stop Session" : "Start Focus")
+                Text(viewModel?.isSessionActive == true ? "Stop Session" : "Start Focus")
                     .font(.title3)
                     .fontWeight(.semibold)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 60)
-            .background(isSessionActive ? .red : .blue)
+            .background(viewModel?.isSessionActive == true ? .red : .blue)
             .foregroundStyle(.white)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: (viewModel?.isSessionActive == true ? Color.red : Color.blue).opacity(0.3), radius: 8, y: 4)
         }
     }
     
@@ -139,23 +150,42 @@ private extension HomeView {
     }
     
     func toolbarButton(icon: String, title: String, isActive: Bool = false) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.title3)
-            Text(title)
-                .font(.caption)
+        Button {
+            
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.title3)
+                Text(title)
+                    .font(.caption)
+            }
         }
         .frame(maxWidth: .infinity)
         .foregroundStyle(isActive ? .blue : .primary)
+    }
+    
+    func handleMainButtonTap() {
+        guard let viewModel else { return }
+        
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+        
+        if viewModel.isSessionActive {
+            viewModel.stopSession()
+        } else {
+            viewModel.startSession()
+        }
     }
 }
 
 // MARK: Previews
 #Preview {
     HomeView()
+        .modelContainer(for: [FocusSession.self, UserSettings.self])
 }
 
 #Preview("Dark") {
     HomeView()
+        .modelContainer(for: [FocusSession.self, UserSettings.self])
         .preferredColorScheme(.dark)
 }
