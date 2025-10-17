@@ -21,22 +21,9 @@
 		24AB90932EA123F10059C2DC /* FocusFlowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FocusFlowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		242C276A2EA187820087414A /* Exceptions for "FocusFlow" folder in "FocusFlowTests" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Views/HomeView.swift,
-			);
-			target = 24AB90922EA123F10059C2DC /* FocusFlowTests */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		24AB906C2EA120110059C2DC /* FocusFlow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				242C276A2EA187820087414A /* Exceptions for "FocusFlow" folder in "FocusFlowTests" target */,
-			);
 			path = FocusFlow;
 			sourceTree = "<group>";
 		};
