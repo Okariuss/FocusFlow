@@ -54,9 +54,10 @@ private extension HomeView {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             
-            Text("0m")
+            Text(viewModel?.todaysTotalFormatted ?? "0m")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.primary)
+                .contentTransition(.numericText())
         }
     }
     
@@ -172,6 +173,8 @@ private extension HomeView {
         
         if viewModel.isSessionActive {
             viewModel.stopSession()
+            
+            viewModel.refreshTodaysTotal()
         } else {
             viewModel.startSession()
         }
