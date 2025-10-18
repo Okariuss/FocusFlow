@@ -219,4 +219,128 @@ struct TimerViewModelTests {
         
         #expect(viewModel.todaysTotalMinutes == 30)
     }
+    
+    @Test func testPauseSession() throws {
+        let context = try createTestContext()
+        let viewModel = TimerViewModel(modelContext: context)
+        
+        viewModel.startSession()
+        #expect(viewModel.isPaused == false)
+        
+        viewModel.pauseSession()
+        
+        #expect(viewModel.isPaused == true)
+        #expect(viewModel.statusText == "Paused")
+        #expect(viewModel.currentSession?.pauseCount == 1)
+    }
+    
+    @Test func testResumeSession() throws {
+        let context = try createTestContext()
+        let viewModel = TimerViewModel(modelContext: context)
+        
+        viewModel.startSession()
+        viewModel.pauseSession()
+        #expect(viewModel.isPaused == true)
+        
+        viewModel.resumeSession()
+        
+        #expect(viewModel.isPaused == false)
+        #expect(viewModel.statusText == "Focusing...")
+    }
+    
+    @MainActor
+    @Test func testPausedDurationTracking() async throws {
+        let context = try createTestContext()
+        let viewModel = TimerViewModel(modelContext: context)
+        
+        viewModel.startSession()
+        let session = viewModel.currentSession!
+        
+        viewModel.pauseSession()
+        
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        
+        viewModel.resumeSession()
+        
+        // Paused duration should be approximately 2 seconds (allow 0.5s tolerance)
+        #expect(session.totalPauseDuration >= 1.5)
+        #expect(session.totalPauseDuration <= 2.5)
+    }
+    
+    @MainActor
+    @Test func testMultiplePauses() async throws {
+        let context = try createTestContext()
+        let viewModel = TimerViewModel(modelContext: context)
+        
+        viewModel.startSession()
+        let session = viewModel.currentSession!
+        
+        viewModel.pauseSession()
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        viewModel.resumeSession()
+        
+        viewModel.pauseSession()
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        viewModel.resumeSession()
+        
+        #expect(session.pauseCount == 2)
+        // Total paused duration should be approximately 2 seconds (allow 1s tolerance)
+        #expect(session.totalPauseDuration >= 1.0)
+        #expect(session.totalPauseDuration <= 3.0)
+    }
+    
+    @Test func testPausedTimeExcludedFromDuration() throws {
+        let context = try createTestContext()
+        
+        let startTime = Date()
+        let session = FocusSession(startTime: startTime)
+        
+        session.endTime = startTime.addingTimeInterval(150)
+        session.totalPauseDuration = 30
+        
+        #expect(session.duration == 120)
+        #expect(session.durationInMinutes == 2)
+    }
+    
+    @Test func testCannotPauseInactiveSession() throws {
+        let context = try createTestContext()
+        let viewModel = TimerViewModel(modelContext: context)
+        
+        viewModel.pauseSession()
+        
+        #expect(viewModel.isPaused == false)
+        #expect(viewModel.currentSession == nil)
+    }
+    
+    @Test func testCannotResumeUnpausedSession() throws {
+        let context = try createTestContext()
+        let viewModel = TimerViewModel(modelContext: context)
+        
+        viewModel.startSession()
+        let initialPauseCount = viewModel.currentSession?.pauseCount ?? 0
+        
+        viewModel.resumeSession()
+        
+        #expect(viewModel.isPaused == false)
+        #expect(viewModel.currentSession?.pauseCount == initialPauseCount)
+    }
+    
+    @MainActor
+    @Test func testStoppingWhilePaused() async throws {
+        let context = try createTestContext()
+        let viewModel = TimerViewModel(modelContext: context)
+        
+        viewModel.startSession()
+        
+        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        viewModel.pauseSession()
+        
+        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        
+        viewModel.stopSession()
+        
+        #expect(viewModel.currentSession == nil)
+        #expect(viewModel.isPaused == false)
+        #expect(viewModel.isSessionActive == false)
+    }
 }
