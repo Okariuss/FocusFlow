@@ -66,8 +66,9 @@ private extension HomeView {
             Text(viewModel?.formattedTime ?? "00:00:00")
                 .font(.system(size: 72, weight: .thin, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(.primary)
+                .foregroundStyle(viewModel?.isPaused == true ? .secondary : .primary)
                 .contentTransition(.numericText())
+                .animation(.easeInOut, value: viewModel?.isPaused)
             
             Text(viewModel?.statusText ?? "Ready to focus")
                 .font(.subheadline)
@@ -87,6 +88,7 @@ private extension HomeView {
             }
         }
         .animation(.easeInOut, value: viewModel?.isSessionActive)
+        .animation(.easeInOut, value: viewModel?.isPaused)
     }
 }
 
@@ -115,20 +117,20 @@ private extension HomeView {
     
     var pauseButton: some View {
         Button {
-            // TODO: Will be filled
+            handlePauseResumeTap()
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "pause.fill")
+                Image(systemName: viewModel?.isPaused == true ? "play.fill" : "pause.fill")
                     .font(.title3)
                 
-                Text("Pause")
+                Text(viewModel?.isPaused == true ? "Resume" : "Pause")
                     .font(.body)
                     .fontWeight(.medium)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 50)
-            .background(.orange.opacity(0.2))
-            .foregroundStyle(.orange)
+            .background(viewModel?.isPaused == true ? Color.blue.opacity(0.2) : Color.orange.opacity(0.2))
+            .foregroundStyle(viewModel?.isPaused == true ? .green : .orange)
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
 
@@ -177,6 +179,19 @@ private extension HomeView {
             viewModel.refreshTodaysTotal()
         } else {
             viewModel.startSession()
+        }
+    }
+    
+    func handlePauseResumeTap() {
+        guard let viewModel else { return }
+        
+        let impact = UIImpactFeedbackGenerator(style: .light)
+        impact.impactOccurred()
+        
+        if viewModel.isPaused {
+            viewModel.resumeSession()
+        } else {
+            viewModel.pauseSession()
         }
     }
 }

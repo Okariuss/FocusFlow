@@ -13,7 +13,9 @@ import SwiftUI
 final class TimerViewModel {
     var currentSession: FocusSession?
     var elapsedTime: TimeInterval = 0
+    var isPaused: Bool = false
     
+    private var pauseStartTime: Date?
     private var timer: Timer?
     private var modelContext: ModelContext
     
@@ -30,7 +32,7 @@ final class TimerViewModel {
     }
     
     var statusText: String {
-        isSessionActive ? "Focusing..." : "Ready to focus"
+        isPaused ? "Paused" : (isSessionActive ? "Focusing..." : "Ready to focus")
     }
     
     var todaysTotalMinutes: Int {
@@ -77,6 +79,10 @@ final class TimerViewModel {
     func stopSession() {
         guard let session = currentSession else { return }
         
+        if isPaused {
+            resumeSession()
+        }
+        
         stopTimer()
         session.endTime = Date()
         
@@ -88,6 +94,36 @@ final class TimerViewModel {
         
         currentSession = nil
         elapsedTime = 0
+        isPaused = false
+        pauseStartTime = nil
+    }
+    
+    func pauseSession() {
+        guard let session = currentSession, !isPaused else { return }
+        
+        stopTimer()
+        
+        isPaused = true
+        pauseStartTime = Date()
+        
+        session.pauseTimestamps.append(Date())
+        session.pauseCount += 1
+    }
+    
+    func resumeSession() {
+        guard let session = currentSession, isPaused else { return }
+        
+        if let pauseStart = pauseStartTime {
+            let pauseDuration = Date().timeIntervalSince(pauseStart)
+            session.totalPauseDuration += pauseDuration
+        }
+        
+        session.resumeTimestamps.append(Date())
+        
+        isPaused = false
+        pauseStartTime = nil
+        
+        startTimer()
     }
     
     func refreshTodaysTotal() {
@@ -95,8 +131,6 @@ final class TimerViewModel {
     }
     
     private func startTimer() {
-//        stopTimer()
-        
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateElapsedTime()
         }
@@ -113,7 +147,14 @@ final class TimerViewModel {
     
     private func updateElapsedTime() {
         guard let session = currentSession else { return }
-        elapsedTime = Date().timeIntervalSince(session.startTime)        
+        
+        if isPaused {
+            return
+        }
+        
+        let totalTime = Date().timeIntervalSince(session.startTime)
+        
+        elapsedTime = totalTime - session.totalPauseDuration
     }
     
     private func calculateTodaysTotal() -> Int {
