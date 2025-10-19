@@ -13,6 +13,9 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: TimerViewModel?
     
+    @State private var showHistory = false
+    @State private var showAnalytics = false
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 30) {
@@ -34,15 +37,20 @@ struct HomeView: View {
             .toolbar {
                 bottomToolbar
             }
+            .sheet(isPresented: $showHistory) {
+                HistoryView()
+            }
+            .sheet(isPresented: $showAnalytics) {
+                Text("Coming Soon")
+            }
             .onAppear {
                 if viewModel == nil {
                     viewModel = TimerViewModel(modelContext: modelContext)
                 }
             }
+            .onChange(of: showHistory) { _, _ in }
         }
     }
-    
-    
 }
 
 // MARK: UI Sections
@@ -54,7 +62,7 @@ private extension HomeView {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             
-            Text(viewModel?.todaysTotalFormatted ?? "0m")
+            Text(viewModel?.todaysTotalSecondsFormatted ?? "0s")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.primary)
                 .contentTransition(.numericText())
@@ -142,20 +150,24 @@ private extension HomeView {
     var bottomToolbar: some ToolbarContent {
         ToolbarItem(placement: .bottomBar) {
             HStack(spacing: 0) {
-                toolbarButton(icon: "clock.fill", title: "History")
+                toolbarButton(icon: "clock.fill", title: "History") {
+                    showHistory = true
+                }
                 Spacer()
-                toolbarButton(icon: "house.fill", title: "Home", isActive: true)
+                toolbarButton(icon: "house.fill", title: "Home", isActive: true) {
+                    
+                }
                 Spacer()
-                toolbarButton(icon: "chart.bar.fill", title: "Analytics")
+                toolbarButton(icon: "chart.bar.fill", title: "Analytics") {
+                    showAnalytics = true
+                }
             }
             .padding(.horizontal)
         }
     }
     
-    func toolbarButton(icon: String, title: String, isActive: Bool = false) -> some View {
-        Button {
-            
-        } label: {
+    func toolbarButton(icon: String, title: String, isActive: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.title3)
@@ -175,8 +187,6 @@ private extension HomeView {
         
         if viewModel.isSessionActive {
             viewModel.stopSession()
-            
-            viewModel.refreshTodaysTotal()
         } else {
             viewModel.startSession()
         }

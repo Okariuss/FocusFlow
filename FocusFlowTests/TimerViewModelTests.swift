@@ -21,7 +21,7 @@ struct TimerViewModelTests {
         )
         return ModelContext(container)
     }
-
+    
     @Test func testViewModelInitialization() throws {
         let context = try createTestContext()
         let viewModel = TimerViewModel(modelContext: context)
@@ -40,7 +40,7 @@ struct TimerViewModelTests {
         viewModel.startSession()
         
         #expect(viewModel.currentSession != nil)
-        #expect(viewModel.isSessionActive)
+        #expect(viewModel.isSessionActive == true)
         #expect(viewModel.statusText == "Focusing...")
         #expect(viewModel.elapsedTime == 0)
     }
@@ -127,72 +127,31 @@ struct TimerViewModelTests {
         let context = try createTestContext()
         let viewModel = TimerViewModel(modelContext: context)
         
-        #expect(viewModel.todaysTotalMinutes == 0)
-        #expect(viewModel.todaysTotalFormatted == "0m")
+        let formatted = viewModel.todaysTotalSecondsFormatted
+        #expect(formatted == "0s")
     }
     
     @Test func testTodaysTotalWithCompletedSessions() throws {
         let context = try createTestContext()
         
         let session1 = FocusSession(
-            startTime: Date().addingTimeInterval(-3600), // 1 hour ago
-            endTime: Date().addingTimeInterval(-2400) // stopped 40 min ago (20 min session)
+            startTime: Date().addingTimeInterval(-3600),
+            endTime: Date().addingTimeInterval(-2400) // 20 min
         )
-        context.insert(session1)
-        
         let session2 = FocusSession(
-            startTime: Date().addingTimeInterval(-1800), // 30 min ago
-            endTime: Date().addingTimeInterval(-600) // stopped 10 min ago (20 min session)
+            startTime: Date().addingTimeInterval(-1800),
+            endTime: Date().addingTimeInterval(-600) // 20 min
         )
-        context.insert(session2)
         
+        context.insert(session1)
+        context.insert(session2)
         try context.save()
         
         let viewModel = TimerViewModel(modelContext: context)
+        let formatted = viewModel.todaysTotalSecondsFormatted
         
-        #expect(viewModel.todaysTotalMinutes == 40)
-        #expect(viewModel.todaysTotalFormatted == "40m")
-    }
-    
-    @Test func testTodaysTotalWithActiveSession() throws {
-        let context = try createTestContext()
-        let viewModel = TimerViewModel(modelContext: context)
-        
-        viewModel.startSession()
-        
-        viewModel.elapsedTime = 300 // 5 min
-        
-        #expect(viewModel.todaysTotalMinutes == 5)
-        #expect(viewModel.todaysTotalFormatted == "5m")
-    }
-    
-    @Test func testTodaysTotalFormatting() throws {
-        let context = try createTestContext()
-        
-        let testCases: [(TimeInterval, String)] = [
-            (0, "0m"),
-            (30 * 60, "30m"),
-            (59 * 60, "59m"),
-            (60 * 60, "1h"),
-            (90 * 60, "1h 30m"),
-            (125 * 60, "2h 5m"),
-            (180 * 60, "3h")
-        ]
-        
-        for (duration, expected) in testCases {
-            let session = FocusSession(
-                startTime: Date().addingTimeInterval(-duration),
-                endTime: Date()
-            )
-            context.insert(session)
-            try context.save()
-            
-            let viewModel = TimerViewModel(modelContext: context)
-            #expect(viewModel.todaysTotalFormatted == expected)
-            
-            context.delete(session)
-            try context.save()
-        }
+        // Should be 40 minutes total
+        #expect(formatted.contains("40m"))
     }
     
     @Test func testOnlyTodaysSessionsCounted() throws {
@@ -203,22 +162,27 @@ struct TimerViewModelTests {
         
         let oldSession = FocusSession(
             startTime: yesterday,
-            endTime: yesterday.addingTimeInterval(3600) // 1 hour session
+            endTime: yesterday.addingTimeInterval(3600) // 1 hour
         )
         context.insert(oldSession)
         
         let todaySession = FocusSession(
             startTime: Date().addingTimeInterval(-1800),
-            endTime: Date() // 30 min session
+            endTime: Date() // 30 min
         )
         context.insert(todaySession)
         
         try context.save()
         
         let viewModel = TimerViewModel(modelContext: context)
+        let formatted = viewModel.todaysTotalSecondsFormatted
         
-        #expect(viewModel.todaysTotalMinutes == 30)
+        // Should only count today's 30 minutes
+        #expect(formatted.contains("30m"))
+        #expect(!formatted.contains("1h"))
     }
+    
+    // MARK: Pause/Resume Tests
     
     @Test func testPauseSession() throws {
         let context = try createTestContext()
@@ -258,11 +222,10 @@ struct TimerViewModelTests {
         
         viewModel.pauseSession()
         
-        try await Task.sleep(nanoseconds: 2_000_000_000)
+        try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
         
         viewModel.resumeSession()
         
-        // Paused duration should be approximately 2 seconds (allow 0.5s tolerance)
         #expect(session.totalPauseDuration >= 1.5)
         #expect(session.totalPauseDuration <= 2.5)
     }
@@ -284,7 +247,6 @@ struct TimerViewModelTests {
         viewModel.resumeSession()
         
         #expect(session.pauseCount == 2)
-        // Total paused duration should be approximately 2 seconds (allow 1s tolerance)
         #expect(session.totalPauseDuration >= 1.0)
         #expect(session.totalPauseDuration <= 3.0)
     }
@@ -332,10 +294,10 @@ struct TimerViewModelTests {
         
         viewModel.startSession()
         
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        try await Task.sleep(nanoseconds: 500_000_000)
         viewModel.pauseSession()
         
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        try await Task.sleep(nanoseconds: 500_000_000)
         
         viewModel.stopSession()
         

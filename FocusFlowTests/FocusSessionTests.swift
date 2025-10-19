@@ -9,9 +9,10 @@ import Testing
 import Foundation
 @testable import FocusFlow
 
+@Suite("FocusSession Model Tests")
 struct FocusSessionTests {
 
-    @Test func testSessionInitialization() async throws {
+    @Test func testSessionInitialization() {
         let session = FocusSession()
         
         #expect(session.note == "")
@@ -23,9 +24,9 @@ struct FocusSessionTests {
         #expect(session.endTime == nil)
     }
     
-    @Test func testDurationCalculation() async throws {
+    @Test func testDurationCalculation() {
         let start = Date()
-        let end = start.addingTimeInterval(3600)
+        let end = start.addingTimeInterval(3600) // 1 hour
         
         let session = FocusSession(
             startTime: start,
@@ -36,57 +37,53 @@ struct FocusSessionTests {
         #expect(session.durationInMinutes == 60)
     }
     
-    @Test func testDurationWithPause() async throws {
+    @Test func testDurationWithPause() {
         let start = Date()
-        let end = start.addingTimeInterval(3600)
+        let end = start.addingTimeInterval(3600) // 1 hour total
         
         let session = FocusSession(
             startTime: start,
             endTime: end,
             pauseCount: 1,
-            totalPauseDuration: 600
+            totalPauseDuration: 600 // 10 minutes paused
         )
         
-        // Should be 50 minutes of actual focus (60 - 10)
-        #expect(session.duration == 3000) // 3000 seconds = 50 minutes
+        // 60 - 10 = 50 minutes
+        #expect(session.duration == 3000)
         #expect(session.durationInMinutes == 50)
     }
-
-    @Test func testActiveSessionDuration() async throws {
-        let start = Date().addingTimeInterval(-1800) // Started 30 minutes ago
+    
+    @Test func testActiveSessionDuration() {
+        let start = Date().addingTimeInterval(-1800) // 30 min ago
         let session = FocusSession(startTime: start)
         
-        // Duration should be approximately 30 minutes (allow 1 second tolerance)
         let expectedDuration: TimeInterval = 1800
         #expect(abs(session.duration - expectedDuration) < 1)
     }
     
-    @Test func testFormattedDuration() async throws {
+    @Test func testFormattedDuration() {
         let start = Date()
         
-        // Test 1: Less than 1 hour
         let session1 = FocusSession(
             startTime: start,
-            endTime: start.addingTimeInterval(2400) // 40 minutes
+            endTime: start.addingTimeInterval(2400) // 40 min
         )
         #expect(session1.formattedDuration == "40m")
         
-        // Test 2: More than 1 hour
         let session2 = FocusSession(
             startTime: start,
-            endTime: start.addingTimeInterval(5400) // 1 hour 30 minutes
+            endTime: start.addingTimeInterval(5400) // 1h 30m
         )
         #expect(session2.formattedDuration == "1h 30m")
         
-        // Test 3: Exactly 2 hours
         let session3 = FocusSession(
             startTime: start,
-            endTime: start.addingTimeInterval(7200) // 2 hours
+            endTime: start.addingTimeInterval(45) // 45s
         )
-        #expect(session3.formattedDuration == "2h 0m")
+        #expect(session3.formattedDuration == "45s")
     }
     
-    @Test func testIsActiveProperty() async throws {
+    @Test func testIsActiveProperty() {
         let activeSession = FocusSession(endTime: nil)
         #expect(activeSession.isActive == true)
         

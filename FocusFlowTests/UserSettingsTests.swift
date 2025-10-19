@@ -9,6 +9,7 @@ import Testing
 import Foundation
 @testable import FocusFlow
 
+@Suite("UserSettings Model Tests")
 struct UserSettingsTests {
     
     @Test func testSettingsInitialization() async throws {

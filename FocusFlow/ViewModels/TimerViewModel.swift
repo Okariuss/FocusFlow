@@ -35,26 +35,8 @@ final class TimerViewModel {
         isPaused ? "Paused" : (isSessionActive ? "Focusing..." : "Ready to focus")
     }
     
-    var todaysTotalMinutes: Int {
-        calculateTodaysTotal()
-    }
-    
-    var todaysTotalFormatted: String {
-        let minutes = todaysTotalMinutes
-        
-        if minutes == 0 {
-            return "0m"
-        } else if minutes < 60 {
-            return "\(minutes)m"
-        } else {
-            let hours = minutes / 60
-            let remainingMinutes = minutes % 60
-            if remainingMinutes == 0 {
-                return "\(hours)h"
-            } else {
-                return "\(hours)h \(remainingMinutes)m"
-            }
-        }
+    var todaysTotalSecondsFormatted: String {
+        calculateTodaysTotal().formattedDuration()
     }
     
     init(modelContext: ModelContext) {
@@ -64,7 +46,9 @@ final class TimerViewModel {
     deinit {
         stopTimer()
     }
-    
+}
+
+extension TimerViewModel {
     func startSession() {
         guard currentSession == nil else { return }
         
@@ -125,14 +109,14 @@ final class TimerViewModel {
         
         startTimer()
     }
-    
-    func refreshTodaysTotal() {
-        _ = todaysTotalMinutes
-    }
-    
-    private func startTimer() {
+}
+
+private extension TimerViewModel {
+    func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateElapsedTime()
+            Task { @MainActor [weak self] in
+                self?.updateElapsedTime()
+            }
         }
         
         if let timer {
@@ -140,24 +124,20 @@ final class TimerViewModel {
         }
     }
     
-    private func stopTimer() {
+    func stopTimer() {
         timer?.invalidate()
         timer = nil
     }
     
-    private func updateElapsedTime() {
-        guard let session = currentSession else { return }
-        
-        if isPaused {
-            return
-        }
+    func updateElapsedTime() {
+        guard let session = currentSession, !isPaused else { return }
         
         let totalTime = Date().timeIntervalSince(session.startTime)
         
         elapsedTime = totalTime - session.totalPauseDuration
     }
     
-    private func calculateTodaysTotal() -> Int {
+    func calculateTodaysTotal() -> Int {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
@@ -182,10 +162,10 @@ final class TimerViewModel {
             }
         }
         
-        if let currentSession {
+        if currentSession != nil {
             totalSeconds += elapsedTime
         }
         
-        return Int(totalSeconds / 60)
+        return Int(totalSeconds)
     }
 }
