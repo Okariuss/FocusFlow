@@ -54,14 +54,7 @@ final class FocusSession {
     }
     
     var formattedDuration: String {
-        let minutes = Int(duration / 60)
-        let hours = minutes / 60
-        let remainingMinutes = minutes % 60
-        
-        if hours > 0 {
-            return "\(hours)h \(remainingMinutes)m"
-        } else {
-            return "\(remainingMinutes)m"
-        }
+        let totalSeconds = Int(duration)
+        return totalSeconds.formattedDuration()
     }
 }
