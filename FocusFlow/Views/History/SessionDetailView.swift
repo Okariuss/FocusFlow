@@ -11,6 +11,8 @@ struct SessionDetailView: View {
     let session: FocusSession
     @Environment(\.dismiss) private var dismiss
     
+    @State private var showNoteEditor = false
+    
     var body: some View {
         NavigationStack {
             List {
@@ -25,6 +27,10 @@ struct SessionDetailView: View {
                     Button("Done", action: dismiss.callAsFunction)
                 }
             }
+            .sheet(isPresented: $showNoteEditor) {
+                SessionNoteView(session: session)
+            }
+
         }
     }
 }
@@ -90,12 +96,30 @@ private extension SessionDetailView {
     var noteSection: some View {
         Section("Note") {
             if session.note.isEmpty {
-                Text("No note added")
-                    .foregroundStyle(.secondary)
-                    .italic()
+                Button {
+                    showNoteEditor = true
+                } label: {
+                    HStack {
+                        Text("Add a note")
+                            .foregroundStyle(.blue)
+                        Spacer()
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(.blue)
+                    }
+                }
             } else {
-                Text(session.note)
-                    .font(.body)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(session.note)
+                        .font(.body)
+                    
+                    Button {
+                        showNoteEditor = true
+                    } label: {
+                        Text("Edit")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    }
+                }
             }
         }
     }
