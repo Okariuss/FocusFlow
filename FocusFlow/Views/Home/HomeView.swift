@@ -43,7 +43,7 @@ struct HomeView: View {
                 HistoryView()
             }
             .sheet(isPresented: $showAnalytics) {
-                Text("Coming Soon")
+                AnalyticsView()
             }
             .sheet(isPresented: $showNoteEditor) {
                 if let completedSession {
