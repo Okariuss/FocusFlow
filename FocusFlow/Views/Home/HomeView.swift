@@ -15,6 +15,8 @@ struct HomeView: View {
     
     @State private var showHistory = false
     @State private var showAnalytics = false
+    @State private var showNoteEditor = false
+    @State private var completedSession: FocusSession?
     
     var body: some View {
         NavigationStack {
@@ -42,6 +44,11 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showAnalytics) {
                 Text("Coming Soon")
+            }
+            .sheet(isPresented: $showNoteEditor) {
+                if let completedSession {
+                    SessionNoteView(session: completedSession)
+                }
             }
             .onAppear {
                 if viewModel == nil {
@@ -186,7 +193,12 @@ private extension HomeView {
         impact.impactOccurred()
         
         if viewModel.isSessionActive {
+            completedSession = viewModel.currentSession
             viewModel.stopSession()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                showNoteEditor = true
+            }
         } else {
             viewModel.startSession()
         }

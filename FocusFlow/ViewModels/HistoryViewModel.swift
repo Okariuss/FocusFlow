@@ -59,6 +59,18 @@ final class HistoryViewModel {
         groupSessionsByDate(sessions)
 
     }
+    
+    func deleteSession(_ session: FocusSession) {
+        modelContext.delete(session)
+        
+        do {
+            try modelContext.save()
+        } catch {
+            assertionFailure("Error deleting session: \(error)")
+        }
+        
+        loadSessions()
+    }
 }
 
 
@@ -77,18 +89,6 @@ private extension HistoryViewModel {
             assertionFailure("Error loading sessions: \(error)")
             return []
         }
-    }
-    
-    func deleteSession(_ session: FocusSession) {
-        modelContext.delete(session)
-        
-        do {
-            try modelContext.save()
-        } catch {
-            assertionFailure("Error deleting session: \(error)")
-        }
-        
-        loadSessions()
     }
     
     func groupSessionsByDate(_ sessions: [FocusSession]) -> [(String, [FocusSession])] {
