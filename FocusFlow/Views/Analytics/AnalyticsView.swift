@@ -7,11 +7,13 @@
 
 import SwiftUI
 import SwiftData
+import Charts
 
 struct AnalyticsView: View {
     
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: AnalyticsViewModel?
+    @State private var selectedDataPoint: ChartDataPoint?
     
     var body: some View {
         NavigationStack {
@@ -34,13 +36,10 @@ private extension AnalyticsView {
                         .frame(minHeight: 400)
                 } else {
                     statisticsCards
-                    chartPlaceholder
+                    chartSection
                 }
             }
             .padding()
-        }
-        .refreshable {
-            viewModel?.loadSessions()
         }
     }
     
@@ -119,17 +118,13 @@ private extension AnalyticsView {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
     
-    var chartPlaceholder: some View {
+    var chartSection: some View {
         VStack(spacing: 16) {
             HStack {
                 Text("Focus Time")
                     .font(.headline)
                 Spacer()
-                Text(periodLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-            
             chartContent
                 .frame(height: 200)
                 .padding()
@@ -140,8 +135,8 @@ private extension AnalyticsView {
     
     var chartContent: some View {
         VStack {
-            if let chartData = viewModel?.chartData, !chartData.isEmpty {
-                chartBars(data: chartData)
+            if let dataPoints = viewModel?.chartDataPoints, !dataPoints.isEmpty {
+                focusTimeChart(dataPoints: dataPoints)
             } else {
                 emptyChartState
             }
@@ -149,48 +144,54 @@ private extension AnalyticsView {
         .animation(.easeInOut, value: viewModel?.selectedPeriod)
     }
     
-    func chartBars(data: [(String, Int)]) -> some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .bottom, spacing: 8) {
-                let maxValue = data.map { $0.1 }.max() ?? 1
-                
-                ForEach(Array(data.enumerated()), id: \.offset) { index, item in
-                    VStack(spacing: 4) {
-                        Spacer()
-                        
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.blue)
-                            .frame(height: barHeight(for: item.1, maximum: maxValue))
-                        
-                        Text(item.0)
+    func focusTimeChart(dataPoints: [ChartDataPoint]) -> some View {
+        Chart(dataPoints) { point in
+            BarMark(
+                x: .value("Period", point.label),
+                y: .value("Duration", point.valueInMinutes)
+            )
+            .foregroundStyle(
+                point.valueInMinutes > 0 ? Color.blue.gradient : Color.gray.opacity(0.3).gradient
+            )
+            .cornerRadius(6)
+            .annotation(position: .top) {
+                if point.valueInMinutes > 0 {
+                    Text(point.formattedValue)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) { value in
+                AxisGridLine()
+                    .foregroundStyle(Color.gray.opacity(0.2))
+                AxisValueLabel {
+                    if let minutes = value.as(Double.self) {
+                        Text("\(Int(minutes))m")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
                     }
                 }
             }
-            .frame(height: 150)
         }
-    }
-    
-    func barHeight(for value: Int, maximum: Int) -> CGFloat {
-        guard maximum > 0 else { return 0 }
-        let percentage = CGFloat(value) / CGFloat(maximum)
-        return max(percentage * 140, value > 0 ? 8 : 0)
+        .chartXAxis {
+            AxisMarks { value in
+                AxisValueLabel {
+                    if let label = value.as(String.self) {
+                        Text(label)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .frame(height: 200)
     }
     
     var emptyChartState: some View {
         ContentUnavailableView("No data for this period", systemImage: "chart.bar")
             .frame(maxHeight: .infinity)
-    }
-    
-    var periodLabel: String {
-        switch viewModel?.selectedPeriod {
-        case .daily: return "Last 7 days"
-        case .weekly: return "Last 4 weeks"
-        case .monthly: return "Last 6 months"
-        case .none: return ""
-        }
     }
 }
 

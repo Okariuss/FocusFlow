@@ -23,14 +23,6 @@ final class AnalyticsViewModel {
         case monthly = "Monthly"
         
         var id: String { rawValue }
-        
-        var daysCount: Int {
-            switch self {
-            case .daily: return 7
-            case .weekly: return 28
-            case .monthly: return 180
-            }
-        }
     }
     
     init(modelContext: ModelContext) {
@@ -64,14 +56,14 @@ final class AnalyticsViewModel {
         sessions.count
     }
     
-    var chartData: [(String, Int)] {
+    var chartDataPoints: [ChartDataPoint] {
         switch selectedPeriod {
         case .daily:
-            return getDailyChartData()
+            return chartDataPointsForLast(days: 7)
         case .weekly:
-            return getWeeklyChartData()
+            return weeklyChartDataPoints(lastWeeks: 4)
         case .monthly:
-            return getMonthlyChartData()
+            return monthlyChartDataPoints(lastMonths: 6)
         }
     }
 }
@@ -100,8 +92,6 @@ private extension AnalyticsViewModel {
     }
     
     func calculateLongestStreak() -> Int {
-        guard !sessions.isEmpty else { return 0 }
-        
         let calendar = Calendar.current
         
         let sessionDates = sessions
@@ -115,10 +105,7 @@ private extension AnalyticsViewModel {
         var currentStreak = 1
         
         for i in 0..<(sessionDates.count - 1) {
-            let currentDate = sessionDates[i]
-            let nextDate = sessionDates[i+1]
-            
-            if let dayDifference = calendar.dateComponents([.day], from: nextDate, to: currentDate).day,
+            if let dayDifference = calendar.dateComponents([.day], from: sessionDates[i+1], to: sessionDates[i]).day,
                 dayDifference == 1 {
                 currentStreak += 1
                 maxStreak = max(maxStreak, currentStreak)
@@ -130,76 +117,48 @@ private extension AnalyticsViewModel {
         return maxStreak
     }
     
-    func getDailyChartData() -> [(String, Int)] {
+    func chartDataPointsForLast(days: Int) -> [ChartDataPoint] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
-        return (0..<7).map { daysAgo in
-            let date = calendar.date(byAdding: .day, value: -daysAgo, to: today)!
-            let dateKey = Date.formatDateForChart(date, period: .daily)
-            let duration = getTotalDurationForDate(date)
-            
-            return (dateKey, duration)
+        return (0..<days).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            let value = totalDuration(from: date, to: calendar.date(byAdding: .day, value: 1, to: date)!)
+            let label = Date.formatDateForChart(date, period: .daily)
+            return ChartDataPoint(label: label, value: value, date: date)
         }.reversed()
     }
     
-    func getWeeklyChartData() -> [(String, Int)] {
+    func weeklyChartDataPoints(lastWeeks: Int) -> [ChartDataPoint] {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        guard let currentWeekStart = Date().startOfWeek(using: calendar) else { return [] }
         
-        return (0..<4).map { weeksAgo in
-            let startOfWeek = calendar.date(byAdding: .weekOfYear, value: -weeksAgo, to: today)!
-            let weekKey = "W\(4 - weeksAgo)"
-            let duration = getTotalDurationForWeek(startOfWeek)
+        return (0..<lastWeeks).compactMap { offset in
+            guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -offset, to: currentWeekStart),
+                  let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else { return nil }
             
-            return (weekKey, duration)
+            let value = totalDuration(from: weekStart, to: weekEnd)
+            let label = weekStart.weekLabel(to: weekEnd, calendar: calendar)
+            return ChartDataPoint(label: label, value: value, date: weekStart)
         }.reversed()
     }
     
-    func getMonthlyChartData() -> [(String, Int)] {
+    func monthlyChartDataPoints(lastMonths: Int) -> [ChartDataPoint] {
         let calendar = Calendar.current
-        let today = Date()
+        guard let currentMonthStart = Date().startOfMonth(using: calendar) else { return [] }
         
-        return (0..<6).map { monthsAgo in
-            let date = calendar.date(byAdding: .month, value: -monthsAgo, to: today)!
-            let monthKey = Date.formatDateForChart(date, period: .monthly)
-            let duration = getTotalDurationForMonth(date)
+        return (0..<lastMonths).compactMap { offset in
+            guard let monthStart = calendar.date(byAdding: .month, value: -offset, to: currentMonthStart),
+                  let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else { return nil }
             
-            return (monthKey, duration)
+            let value = totalDuration(from: monthStart, to: monthEnd)
+            let label = monthStart.monthLabel(calendar: calendar)
+            return ChartDataPoint(label: label, value: value, date: monthStart)
         }.reversed()
     }
     
-    func getTotalDurationForDate(_ date: Date) -> Int {
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        
-        return sessions
-            .filter { $0.startTime >= startOfDay && $0.startTime < endOfDay }
-            .reduce(0) { $0 + Int($1.duration) }
-    }
-    
-    func getTotalDurationForWeek(_ startDate: Date) -> Int {
-        let calendar = Calendar.current
-        let startOfWeek = calendar.startOfDay(for: startDate)
-        let endOfWeek = calendar.date(byAdding: .weekOfYear, value: 1, to: startOfWeek)!
-        
-        return sessions
-            .filter { $0.startTime >= startOfWeek && $0.startTime < endOfWeek }
-            .reduce(0) { $0 + Int($1.duration) }
-    }
-    
-    func getTotalDurationForMonth(_ date: Date) -> Int {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month], from: date)
-        
-        guard let startOfMonth = calendar.date(from: components),
-              let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth) else {
-            return 0
-        }
-        
-        return sessions
-            .filter { $0.startTime >= startOfMonth && $0.startTime < endOfMonth }
+    func totalDuration(from start: Date, to end: Date) -> Int {
+        sessions.filter { $0.startTime >= start && $0.startTime < end }
             .reduce(0) { $0 + Int($1.duration) }
     }
 }
