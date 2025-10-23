@@ -32,11 +32,11 @@ extension Date {
         
         switch period {
         case .daily:
-            formatter.dateFormat = "EEE" // Mon, Tue, Wed
+            formatter.dateFormat = "EEE"
         case .weekly:
-            formatter.dateFormat = "MMM d" // Jan 1
+            formatter.dateFormat = "w"
         case .monthly:
-            formatter.dateFormat = "MMM" // Jan, Feb, Mar
+            formatter.dateFormat = "MMM"
         }
         
         return formatter.string(from: date)
@@ -46,6 +46,28 @@ extension Date {
         let formatter = DateFormatter()
         formatter.dateStyle = dateStyle
         formatter.timeStyle = timeStyle
+        return formatter.string(from: self)
+    }
+    
+    func startOfWeek(using calendar: Calendar = .current) -> Date? {
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: self)
+        return calendar.date(from: components)
+    }
+    
+    func startOfMonth(using calendar: Calendar = .current) -> Date? {
+        let components = calendar.dateComponents([.year, .month], from: self)
+        return calendar.date(from: components)
+    }
+    
+    func weekLabel(to endDate: Date, calendar: Calendar = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        return "\(formatter.string(from: self))–\(formatter.string(from: calendar.date(byAdding: .day, value: -1, to: endDate)!))"
+    }
+    
+    func monthLabel(calendar: Calendar = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM yyyy"
         return formatter.string(from: self)
     }
 }
