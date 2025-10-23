@@ -31,6 +31,7 @@ private extension AnalyticsView {
                 
                 if viewModel?.sessions.isEmpty == true {
                     emptyState
+                        .frame(minHeight: 400)
                 } else {
                     statisticsCards
                     chartPlaceholder
@@ -66,14 +67,14 @@ private extension AnalyticsView {
                 statisticCard(
                     icon: "clock.fill",
                     title: "Total Time",
-                    value: viewModel?.totalFocusTime ?? "0h 0m",
+                    value: viewModel?.totalFocusTime ?? "0h 0m 0s",
                     color: .blue
                 )
                 
                 statisticCard(
                     icon: "chart.line.uptrend.xyaxis",
                     title: "Average",
-                    value: viewModel?.averageSessionLength ?? "0m",
+                    value: viewModel?.averageSessionLength ?? "0h 0m 0s",
                     color: .green
                 )
             }
@@ -124,30 +125,71 @@ private extension AnalyticsView {
                 Text("Focus Time")
                     .font(.headline)
                 Spacer()
-            }
-            
-            // Placeholder chart area
-            VStack {
-                Spacer()
-                
-                HStack(alignment: .bottom, spacing: 8) {
-                    ForEach(0..<7) { index in
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.blue.opacity(0.3))
-                            .frame(height: CGFloat.random(in: 40...120))
-                    }
-                }
-                .frame(height: 150)
-                
-                Spacer()
-                
-                Text("Chart will display data in B-010")
+                Text(periodLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding()
-            .background(Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            chartContent
+                .frame(height: 200)
+                .padding()
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+    
+    var chartContent: some View {
+        VStack {
+            if let chartData = viewModel?.chartData, !chartData.isEmpty {
+                chartBars(data: chartData)
+            } else {
+                emptyChartState
+            }
+        }
+        .animation(.easeInOut, value: viewModel?.selectedPeriod)
+    }
+    
+    func chartBars(data: [(String, Int)]) -> some View {
+        VStack(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
+                let maxValue = data.map { $0.1 }.max() ?? 1
+                
+                ForEach(Array(data.enumerated()), id: \.offset) { index, item in
+                    VStack(spacing: 4) {
+                        Spacer()
+                        
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.blue)
+                            .frame(height: barHeight(for: item.1, maximum: maxValue))
+                        
+                        Text(item.0)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .frame(height: 150)
+        }
+    }
+    
+    func barHeight(for value: Int, maximum: Int) -> CGFloat {
+        guard maximum > 0 else { return 0 }
+        let percentage = CGFloat(value) / CGFloat(maximum)
+        return max(percentage * 140, value > 0 ? 8 : 0)
+    }
+    
+    var emptyChartState: some View {
+        ContentUnavailableView("No data for this period", systemImage: "chart.bar")
+            .frame(maxHeight: .infinity)
+    }
+    
+    var periodLabel: String {
+        switch viewModel?.selectedPeriod {
+        case .daily: return "Last 7 days"
+        case .weekly: return "Last 4 weeks"
+        case .monthly: return "Last 6 months"
+        case .none: return ""
         }
     }
 }

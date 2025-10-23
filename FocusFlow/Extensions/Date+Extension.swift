@@ -27,6 +27,21 @@ extension Date {
         return formatter.string(from: date)
     }
     
+    static func formatDateForChart(_ date: Date, period: AnalyticsViewModel.TimePeriod) -> String {
+        let formatter = DateFormatter()
+        
+        switch period {
+        case .daily:
+            formatter.dateFormat = "EEE" // Mon, Tue, Wed
+        case .weekly:
+            formatter.dateFormat = "MMM d" // Jan 1
+        case .monthly:
+            formatter.dateFormat = "MMM" // Jan, Feb, Mar
+        }
+        
+        return formatter.string(from: date)
+    }
+    
     func formatDateWithStyle(dateStyle: DateFormatter.Style, timeStyle: DateFormatter.Style = .none) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = dateStyle
