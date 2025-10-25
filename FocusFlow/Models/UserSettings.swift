@@ -25,15 +25,4 @@ final class UserSettings {
         self.lastSessionDate = lastSessionDate
         self.darkModePreference = darkModePreference
     }
-    
-    var focusedToday: Bool {
-        guard let lastSessionDate else { return false }
-        return Calendar.current.isDateInToday(lastSessionDate)
-    }
-    
-    func calculateStreak(sessions: [FocusSession]) -> Int {
-        // TODO: This will be implemented in a later build when we have session data
-        // For now, return 0
-        return 0
-    }
 }

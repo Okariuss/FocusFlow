@@ -13,11 +13,13 @@ import UIKit
 @Observable
 final class SessionNoteViewModel {
     var noteText: String
-    var session: FocusSession
+    let session: FocusSession
     
-    private var modelContext: ModelContext
+    private let persistenceService: DataPersistenceService
+    private let hapticService: HapticFeedbackProviding
     private let originalNote: String
     
+    // MARK: Computed Properties
     var hasChanges: Bool {
         noteText.trimmingCharacters(in: .whitespacesAndNewlines) != originalNote
     }
@@ -26,22 +28,30 @@ final class SessionNoteViewModel {
         hasChanges
     }
     
-    init(session: FocusSession, modelContext: ModelContext) {
+    init(
+        session: FocusSession,
+        persistenceService: DataPersistenceService,
+        hapticService: HapticFeedbackProviding = HapticFeedbackService(),
+    ) {
         self.session = session
-        self.modelContext = modelContext
+        self.persistenceService = persistenceService
+        self.hapticService = hapticService
         self.noteText = session.note
         self.originalNote = session.note
     }
     
+    convenience init(session: FocusSession, modelContext: ModelContext) {
+        self.init(session: session, persistenceService: SwiftDataPersistenceService(modelContext: modelContext))
+    }
+    
+    // MARK: Actions
     func saveNote() {
         let trimmedNote = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
         session.note = trimmedNote
         
         do {
-            try modelContext.save()
-            
-            let notification = UINotificationFeedbackGenerator()
-            notification.notificationOccurred(.success)
+            try persistenceService.save()
+            hapticService.success()
         } catch {
             assertionFailure("Error saving note: \(error)")
         }
