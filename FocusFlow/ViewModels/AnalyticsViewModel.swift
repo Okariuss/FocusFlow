@@ -9,13 +9,33 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+protocol SessionManaging {
+    var sessions: [FocusSession] { get }
+    func loadSessions()
+    func deleteSession(_ session: FocusSession)
+}
+
+protocol SessionStatisticsProviding {
+    var totalFocusTime: String { get }
+    var averageSessionLength: String { get }
+    var totalSessions: Int { get }
+}
+
+protocol ChartDataProviding {
+    func chartDataPoints(for period: AnalyticsViewModel.TimePeriod) -> [ChartDataPoint]
+}
+
 @MainActor
 @Observable
-final class AnalyticsViewModel {
+final class AnalyticsViewModel: SessionManaging, SessionStatisticsProviding, ChartDataProviding {
+    
     var sessions: [FocusSession] = []
     var selectedPeriod: TimePeriod = .daily
     
-    private var modelContext: ModelContext
+    private let persistenceService: DataPersistenceService
+    private let statisticsCalculator: SessionStatisticsCalculator
+    private let streakCalculator: StreakCalculating
+    private let chartDataGenerator: ChartDataGenerator
     
     enum TimePeriod: String, CaseIterable, Identifiable {
         case daily = "Daily"
@@ -25,45 +45,74 @@ final class AnalyticsViewModel {
         var id: String { rawValue }
     }
     
-    init(modelContext: ModelContext) {
-        self.modelContext = modelContext
+    init(
+        persistenceService: DataPersistenceService,
+        statisticsCalculator: SessionStatisticsCalculator = SessionStatisticsCalculator(),
+        streakCalculator: StreakCalculating = StreakCalculator(),
+        chartDataGenerator: ChartDataGenerator = ChartDataGenerator()
+    ) {
+        self.persistenceService = persistenceService
+        self.statisticsCalculator = statisticsCalculator
+        self.streakCalculator = streakCalculator
+        self.chartDataGenerator = chartDataGenerator
         loadSessions()
+    }
+    
+    convenience init(modelContext: ModelContext) {
+        self.init(persistenceService: SwiftDataPersistenceService(modelContext: modelContext))
     }
     
     func loadSessions() {
         sessions = fetchAllCompletedSessions()
     }
     
+    func deleteSession(_ session: FocusSession) {
+        persistenceService.delete(session)
+        
+        do {
+            try persistenceService.save()
+            loadSessions()
+        } catch {
+            assertionFailure("Error deleting session: \(error)")
+        }
+    }
+    
+    // MARK: Statistics
     var totalFocusTime: String {
-        let totalSeconds = calculateTotalFocusTime()
-        return totalSeconds.formattedDuration()
+        statisticsCalculator
+            .calculateTotalFocusTime(from: sessions)
+            .formattedDuration()
     }
     
     var averageSessionLength: String {
         guard !sessions.isEmpty else { return "0s" }
         
-        let totalSeconds = calculateTotalFocusTime()
-        let averageSeconds = totalSeconds / sessions.count
-        
-        return averageSeconds.formattedDuration()
+        return statisticsCalculator
+            .calculateAverageSessionLength(from: sessions)
+            .formattedDuration()
     }
     
     var longestStreak: Int {
-        calculateLongestStreak()
+        streakCalculator.calculateLongestStreak(from: sessions)
     }
     
     var totalSessions: Int {
         sessions.count
     }
     
+    // MARK: Chart Data
     var chartDataPoints: [ChartDataPoint] {
-        switch selectedPeriod {
+        chartDataPoints(for: selectedPeriod)
+    }
+    
+    func chartDataPoints(for period: TimePeriod) -> [ChartDataPoint] {
+        switch period {
         case .daily:
-            return chartDataPointsForLast(days: 7)
+            return chartDataGenerator.generateDailyData(sessions: sessions, days: 7)
         case .weekly:
-            return weeklyChartDataPoints(lastWeeks: 4)
+            return chartDataGenerator.generateWeeklyData(sessions: sessions, weeks: 4)
         case .monthly:
-            return monthlyChartDataPoints(lastMonths: 6)
+            return chartDataGenerator.generateMonthlyData(sessions: sessions, months: 6)
         }
     }
 }
@@ -78,87 +127,10 @@ private extension AnalyticsViewModel {
         )
         
         do {
-            return try modelContext.fetch(descriptor)
+            return try persistenceService.fetch(descriptor)
         } catch {
             assertionFailure("Error loading sessions: \(error)")
             return []
         }
-    }
-    
-    func calculateTotalFocusTime() -> Int {
-        sessions.reduce(0) { total, session in
-            total + Int(session.duration)
-        }
-    }
-    
-    func calculateLongestStreak() -> Int {
-        let calendar = Calendar.current
-        
-        let sessionDates = sessions
-            .map { calendar.startOfDay(for: $0.startTime) }
-            .uniqued()
-            .sorted(by: >)
-        
-        guard !sessionDates.isEmpty else { return 0 }
-        
-        var maxStreak = 1
-        var currentStreak = 1
-        
-        for i in 0..<(sessionDates.count - 1) {
-            if let dayDifference = calendar.dateComponents([.day], from: sessionDates[i+1], to: sessionDates[i]).day,
-                dayDifference == 1 {
-                currentStreak += 1
-                maxStreak = max(maxStreak, currentStreak)
-            } else {
-                currentStreak = 1
-            }
-        }
-        
-        return maxStreak
-    }
-    
-    func chartDataPointsForLast(days: Int) -> [ChartDataPoint] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        
-        return (0..<days).compactMap { offset in
-            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
-            let value = totalDuration(from: date, to: calendar.date(byAdding: .day, value: 1, to: date)!)
-            let label = Date.formatDateForChart(date, period: .daily)
-            return ChartDataPoint(label: label, value: value, date: date)
-        }.reversed()
-    }
-    
-    func weeklyChartDataPoints(lastWeeks: Int) -> [ChartDataPoint] {
-        let calendar = Calendar.current
-        guard let currentWeekStart = Date().startOfWeek(using: calendar) else { return [] }
-        
-        return (0..<lastWeeks).compactMap { offset in
-            guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -offset, to: currentWeekStart),
-                  let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else { return nil }
-            
-            let value = totalDuration(from: weekStart, to: weekEnd)
-            let label = weekStart.weekLabel(to: weekEnd, calendar: calendar)
-            return ChartDataPoint(label: label, value: value, date: weekStart)
-        }.reversed()
-    }
-    
-    func monthlyChartDataPoints(lastMonths: Int) -> [ChartDataPoint] {
-        let calendar = Calendar.current
-        guard let currentMonthStart = Date().startOfMonth(using: calendar) else { return [] }
-        
-        return (0..<lastMonths).compactMap { offset in
-            guard let monthStart = calendar.date(byAdding: .month, value: -offset, to: currentMonthStart),
-                  let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else { return nil }
-            
-            let value = totalDuration(from: monthStart, to: monthEnd)
-            let label = monthStart.monthLabel(calendar: calendar)
-            return ChartDataPoint(label: label, value: value, date: monthStart)
-        }.reversed()
-    }
-    
-    func totalDuration(from start: Date, to end: Date) -> Int {
-        sessions.filter { $0.startTime >= start && $0.startTime < end }
-            .reduce(0) { $0 + Int($1.duration) }
     }
 }

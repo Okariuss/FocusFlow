@@ -17,18 +17,15 @@ final class TimerViewModel {
     
     private var pauseStartTime: Date?
     private var timer: Timer?
-    private var modelContext: ModelContext
+    private var persistenceService: DataPersistenceService
     
+    // MARK: Computed Properties
     var isSessionActive: Bool {
         currentSession != nil
     }
     
     var formattedTime: String {
-        let hours = Int(elapsedTime) / 3600
-        let minutes = (Int(elapsedTime) % 3600) / 60
-        let seconds = Int(elapsedTime) % 60
-        
-        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+        formatTime(elapsedTime)
     }
     
     var statusText: String {
@@ -39,8 +36,12 @@ final class TimerViewModel {
         calculateTodaysTotal().formattedDuration()
     }
     
-    init(modelContext: ModelContext) {
-        self.modelContext = modelContext
+    init(persistenceService: DataPersistenceService) {
+        self.persistenceService = persistenceService
+    }
+    
+    convenience init(modelContext: ModelContext) {
+        self.init(persistenceService: SwiftDataPersistenceService(modelContext: modelContext))
     }
     
     deinit {
@@ -48,13 +49,14 @@ final class TimerViewModel {
     }
 }
 
+// MARK: Session Management
 extension TimerViewModel {
     func startSession() {
         guard currentSession == nil else { return }
         
         let newSession = FocusSession(startTime: Date())
         currentSession = newSession
-        modelContext.insert(newSession)
+        persistenceService.insert(newSession)
         
         elapsedTime = 0
         startTimer()
@@ -71,15 +73,12 @@ extension TimerViewModel {
         session.endTime = Date()
         
         do {
-            try modelContext.save()
+            try persistenceService.save()
         } catch {
             assertionFailure("❌ Failed to save session: \(error.localizedDescription)")
         }
         
-        currentSession = nil
-        elapsedTime = 0
-        isPaused = false
-        pauseStartTime = nil
+        resetSession()
     }
     
     func pauseSession() {
@@ -133,33 +132,34 @@ private extension TimerViewModel {
         guard let session = currentSession, !isPaused else { return }
         
         let totalTime = Date().timeIntervalSince(session.startTime)
-        
         elapsedTime = totalTime - session.totalPauseDuration
+    }
+    
+    func resetSession() {
+        currentSession = nil
+        elapsedTime = 0
+        isPaused = false
+        pauseStartTime = nil
     }
     
     func calculateTodaysTotal() -> Int {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) else { return 0 }
         
-        var descriptor = FetchDescriptor<FocusSession>(
+        let descriptor = FetchDescriptor<FocusSession>(
             predicate: #Predicate { session in
                 session.startTime >= today && session.startTime < tomorrow
-            }
+            },
+            sortBy: [SortDescriptor(\.startTime)]
         )
         
-        descriptor.sortBy = [SortDescriptor(\.startTime)]
-        
-        guard let sessions = try? modelContext.fetch(descriptor) else {
-            return 0
-        }
+        guard let sessions = try? persistenceService.fetch(descriptor) else { return 0 }
         
         var totalSeconds: TimeInterval = 0
         
-        for session in sessions {
-            if session.endTime != nil {
-                totalSeconds += session.duration
-            }
+        for session in sessions where session.endTime != nil {
+            totalSeconds += session.duration
         }
         
         if currentSession != nil {
@@ -167,5 +167,13 @@ private extension TimerViewModel {
         }
         
         return Int(totalSeconds)
+    }
+    
+    func formatTime(_ timeInterval: TimeInterval) -> String {
+        let hours = Int(timeInterval) / 3600
+        let minutes = (Int(timeInterval) % 3600) / 60
+        let seconds = Int(timeInterval) % 60
+        
+        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
     }
 }

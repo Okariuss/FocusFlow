@@ -45,14 +45,6 @@ final class FocusSession {
         return max(0, totalTime - totalPauseDuration)
     }
     
-    var durationInMinutes: Int {
-        Int(duration / 60)
-    }
-    
-    var isActive: Bool {
-        endTime == nil
-    }
-    
     var formattedDuration: String {
         let totalSeconds = Int(duration)
         return totalSeconds.formattedDuration()

@@ -11,23 +11,45 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class HistoryViewModel {
+final class HistoryViewModel: SessionManaging {
     var sessions: [FocusSession] = []
     var sessionToDelete: FocusSession?
     var showDeleteConfirmation = false
     
-    private var modelContext: ModelContext
+    private let persistenceService: DataPersistenceService
+    private let hapticService: HapticFeedbackProviding
     
-    init(modelContext: ModelContext) {
-        self.modelContext = modelContext
+    init(
+        persistenceService: DataPersistenceService,
+        hapticService: HapticFeedbackProviding = HapticFeedbackService()
+    ) {
+        self.persistenceService = persistenceService
+        self.hapticService = hapticService
         loadSessions()
     }
     
+    convenience init(modelContext: ModelContext) {
+        self.init(persistenceService: SwiftDataPersistenceService(modelContext: modelContext))
+    }
+    
+    // MARK: Session Management
     func loadSessions() {
         sessions = fetchCompletedSessions()
         
     }
     
+    func deleteSession(_ session: FocusSession) {
+        persistenceService.delete(session)
+        
+        do {
+            try persistenceService.save()
+            loadSessions()
+        } catch {
+            assertionFailure("Error deleting session: \(error)")
+        }
+    }
+    
+    // MARK: Delete Confirmation
     func requestDeleteSession(_ session: FocusSession) {
         sessionToDelete = session
         showDeleteConfirmation = true
@@ -40,36 +62,22 @@ final class HistoryViewModel {
             deleteSession(session)
         }
         
-        let notification = UINotificationFeedbackGenerator()
-        notification.notificationOccurred(.success)
-        
+        hapticService.success()
         resetDeleteState()
     }
     
     func cancelDelete() {
-        let impact = UIImpactFeedbackGenerator(style: .light)
-        impact.impactOccurred()
+        hapticService.light()
         
         withAnimation(.none) {
             resetDeleteState()
         }
     }
     
+    // MARK: Data Grouping
     func sessionsByDate() -> [(String, [FocusSession])] {
         groupSessionsByDate(sessions)
 
-    }
-    
-    func deleteSession(_ session: FocusSession) {
-        modelContext.delete(session)
-        
-        do {
-            try modelContext.save()
-        } catch {
-            assertionFailure("Error deleting session: \(error)")
-        }
-        
-        loadSessions()
     }
 }
 
@@ -84,7 +92,7 @@ private extension HistoryViewModel {
         )
         
         do {
-            return try modelContext.fetch(descriptor)
+            return try persistenceService.fetch(descriptor)
         } catch {
             assertionFailure("Error loading sessions: \(error)")
             return []
@@ -102,8 +110,10 @@ private extension HistoryViewModel {
         return grouped.sorted(by: sortDateSections)
     }
     
-    func sortDateSections(_ first: (key: String, value: [FocusSession]),
-                          _ second: (key: String, value: [FocusSession])) -> Bool {
+    func sortDateSections(
+        _ first: (key: String, value: [FocusSession]),
+        _ second: (key: String, value: [FocusSession])
+    ) -> Bool {
         if first.key == "Today" { return true }
         if second.key == "Today" { return false }
         if first.key == "Yesterday" { return true }

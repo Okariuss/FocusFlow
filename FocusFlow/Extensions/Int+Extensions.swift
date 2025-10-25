@@ -9,9 +9,10 @@ import Foundation
 
 extension Int {
     func formattedDuration() -> String {
-        let hours = self / 3600
-        let minutes = (self % 3600) / 60
-        let seconds = self % 60
+        let totalSeconds = Swift.max(0, self)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
         
         var parts: [String] = []
         
